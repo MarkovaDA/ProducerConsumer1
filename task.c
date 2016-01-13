@@ -73,6 +73,7 @@ int main(){
 		myMutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
     onPutCondition = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
     pthread_cond_init(onPutCondition, NULL);
+		pthread_cond_init(onTakeCondition, NULL);
     pthread_mutex_init(myMutex, NULL);
 
 		pthread_t prod, cons;//производитель, потребитель
@@ -101,7 +102,7 @@ int main(){
         exit(1);
     }
 		fclose(f);
-		printf("TotalSum in file: %d\n", totalSum);
+		//printf("TotalSum in file: %d\n", totalSum);
     return 0;
 }
 
@@ -112,7 +113,11 @@ int main(){
 */
 static void *producer(void* arg)
 {   pthread_mutex_lock(myMutex);
-    char *line = NULL; int temp;
+		//если очередь переполнена, то производитель ждет, чтобы потребитель снял оттуда элемент
+    while(queue_size(queueSource) > 100)
+			pthread_cond_wait(onTakeCondition, myMutex);
+    //парсит строку    
+		char *line = NULL; int temp;
 		size_t len = 0;
 		ssize_t read;
     while ((read = getline(&line, &len, f)) != -1) {
@@ -128,7 +133,7 @@ static void *producer(void* arg)
 					printf("in producer: %d\n", sumIntoStr);
           //кладём сумму строки в очередь
           queue_enqueue(queueSource, sumIntoStr);
-					//if (queue_size(queueSource) - 1 == 0) //очередь была пустая, а теперь нет - об этом нужно оповестить потребителя
+					if (queue_size(queueSource) - 1 <= 0) //очередь была пустая, а теперь нет - об этом нужно оповестить потребителя
 					pthread_cond_signal(onPutCondition);
     }
 		pthread_mutex_unlock(myMutex);
@@ -140,11 +145,12 @@ static void *producer(void* arg)
 static void *consumer(void* arg)
 {
 	 pthread_mutex_lock(myMutex);
-   printf("in consumer queue size: %d\n", queue_size(queueSource));
 	 //если очередь пуста, то ждем, пока туда производитель не положет
 	 while(queue_size(queueSource) <= 0)
 		pthread_cond_wait(onPutCondition, myMutex);
-   	totalSum += queue_dequeue(queueSource);
-	 	printf("in consumer: %d\n",totalSum); 
+   totalSum += queue_dequeue(queueSource);
+	 printf("in consumer: %d\n",totalSum); 
+	 //потребитель уведомлет производителя об уменьшении элементов в очереди, на случай, если она была переполнена
+	 pthread_cond_signal(onTakeCondition);
 	 pthread_mutex_unlock(myMutex);
 }
