@@ -55,6 +55,7 @@ int queue_dequeue(struct queue *q){
 
 
 static void *producer(void* arg);
+static void *consumer(void* arg);
 
 struct queue *queueSource;//буфер для хранения промежуточных результатов
 pthread_mutex_t* myMutex;//мьютекс для синхронизации доступа к очереди
@@ -67,7 +68,13 @@ int main(){
 		if (f == NULL)
 			exit(EXIT_FAILURE);
     queueSource = queue_create(100);
-		pthread_t prod;//производитель
+		//инициализация mutex и события
+		myMutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
+    onPutCondition = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+    pthread_cond_init(onPutCondition, NULL);
+    pthread_mutex_init(myMutex, NULL);
+
+		pthread_t prod, cons;//производитель, потребитель
 		//инициализация потока производителя
 		int resCreate =  pthread_create(&prod, NULL, producer, NULL);
     if(resCreate != 0){
@@ -81,8 +88,21 @@ int main(){
         exit(1);
     }
 		fclose(f);
-		printf("%s", "производитель закончил работу");
-    return 0;   
+		//инициализация потока потребителя
+	  resCreate =  pthread_create(&cons, NULL, consumer, NULL);
+    if(resCreate != 0){
+            printf("Error creating consumer-thread\n");
+            exit(1);
+    }
+    resCreate = pthread_join(cons, NULL);
+    if(resCreate != 0)
+    {
+        printf("Thread consumer joining failed\n");
+        exit(1);
+    }
+		fclose(f);
+		printf("%s\n", "the end");
+    return 0;
 }
 
 /*
@@ -91,7 +111,7 @@ int main(){
 *и кладет результат в общий буфер - queueSource
 */
 static void *producer(void* arg)
-{
+{   pthread_mutex_lock(myMutex);
     char *line = NULL; int temp;
 		size_t len = 0;
 		ssize_t read;
@@ -105,8 +125,23 @@ static void *producer(void* arg)
 							sumIntoStr += temp;
 							token = strtok(NULL, " ");
 					}
-					printf("%d\n", sumIntoStr);
           //кладём сумму строки в очередь
           queue_enqueue(queueSource, sumIntoStr);
+					if (queue_size(queueSource) - 1 == 0) //очередь была пустая, а теперь нет - об этом нужно оповестить потребителя
+					pthread_cond_signal(onPutCondition);
     }
+		pthread_mutex_unlock(myMutex);
+}
+/*
+*функция потребителя: берет число из очереди, пока она не пустая
+*и суммирует в общую переменную totalSum
+*/
+static void *consumer(void* arg)
+{
+	 pthread_mutex_lock(myMutex);
+	 //если очередь пуста, то ждем, пока туда производитель не положет
+	 while(queue_size(queueSource) == 0)
+		pthread_cond_wait(onPutCondition, myMutex);
+	 totalSum += queue_dequeue(queueSource);
+	 pthread_mutex_unlock(myMutex);
 }

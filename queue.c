@@ -50,14 +50,17 @@ int queue_dequeue(struct queue *q){
     q->size--;
 		return q->v[q->head++];
 }
-struct queue *queueSource;
-pthread_mutex_t* myMutex;//мьютекс для синхронизации доступа к очереди
-pthread_cond_t* onPutCondition; //событие,которое будет активироваться при добавлении в очередь данных
-File *f;//исходный файл с чилами
-int totalSum; //сумма всех чисел в файле
 int main(){
-		f = fopen("source.txt", "r");
-    queueSource = queue_create(100);
-		pthread_t prod;//производитель
+		struct queue *q;
+    int i,val;
+    q = queue_create(10);
+    val = queue_dequeue(q); 
+    queue_enqueue(q, 0);
+    queue_enqueue(q, 5);
+    queue_enqueue(q, 2);
+    queue_enqueue(q, 3);
+    queue_enqueue(q, 12);
+    queue_enqueue(q, 4);
+    printf("%d\n", queue_size(q)); 
     return 0;   
 }
