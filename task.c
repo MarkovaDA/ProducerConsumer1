@@ -59,7 +59,8 @@ static void *consumer(void* arg);
 
 struct queue *queueSource;//буфер для хранения промежуточных результатов
 pthread_mutex_t* myMutex;//мьютекс для синхронизации доступа к очереди
-pthread_cond_t* onPutCondition; //событие,которое будет активироваться при добавлении в очередь данных
+pthread_cond_t* onPutCondition; //событие,которое будет активироваться при добавлении производителем в очередь данных
+pthread_cond_t* onTakeCondition; //событие, которое активируется при взятии  элемента из очереди потребителем 
 FILE *f;//исходный файл с чилами
 int totalSum; //сумма всех чисел в файле
 
@@ -87,7 +88,6 @@ int main(){
         printf("Thread producer joining failed\n");
         exit(1);
     }
-		fclose(f);
 		//инициализация потока потребителя
 	  resCreate =  pthread_create(&cons, NULL, consumer, NULL);
     if(resCreate != 0){
@@ -101,7 +101,7 @@ int main(){
         exit(1);
     }
 		fclose(f);
-		printf("%s\n", "the end");
+		printf("TotalSum in file: %d\n", totalSum);
     return 0;
 }
 
@@ -125,9 +125,10 @@ static void *producer(void* arg)
 							sumIntoStr += temp;
 							token = strtok(NULL, " ");
 					}
+					printf("in producer: %d\n", sumIntoStr);
           //кладём сумму строки в очередь
           queue_enqueue(queueSource, sumIntoStr);
-					if (queue_size(queueSource) - 1 == 0) //очередь была пустая, а теперь нет - об этом нужно оповестить потребителя
+					//if (queue_size(queueSource) - 1 == 0) //очередь была пустая, а теперь нет - об этом нужно оповестить потребителя
 					pthread_cond_signal(onPutCondition);
     }
 		pthread_mutex_unlock(myMutex);
@@ -139,9 +140,11 @@ static void *producer(void* arg)
 static void *consumer(void* arg)
 {
 	 pthread_mutex_lock(myMutex);
+   printf("in consumer queue size: %d\n", queue_size(queueSource));
 	 //если очередь пуста, то ждем, пока туда производитель не положет
-	 while(queue_size(queueSource) == 0)
+	 while(queue_size(queueSource) <= 0)
 		pthread_cond_wait(onPutCondition, myMutex);
-	 totalSum += queue_dequeue(queueSource);
+   	totalSum += queue_dequeue(queueSource);
+	 	printf("in consumer: %d\n",totalSum); 
 	 pthread_mutex_unlock(myMutex);
 }
