@@ -1,5 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/time.h>
+#include <string.h>
  
 struct queue{
     int *v;
@@ -54,12 +59,14 @@ static void *producer(void* arg);
 struct queue *queueSource;//буфер для хранения промежуточных результатов
 pthread_mutex_t* myMutex;//мьютекс для синхронизации доступа к очереди
 pthread_cond_t* onPutCondition; //событие,которое будет активироваться при добавлении в очередь данных
-File *f;//исходный файл с чилами
+FILE *f;//исходный файл с чилами
 int totalSum; //сумма всех чисел в файле
 
 int main(){
 		f = fopen("source.txt", "r");
-    queueSource = create(100);
+		if (f == NULL)
+			exit(EXIT_FAILURE);
+    queueSource = queue_create(100);
 		pthread_t prod;//производитель
 		//инициализация потока производителя
 		int resCreate =  pthread_create(&prod, NULL, producer, NULL);
@@ -67,31 +74,37 @@ int main(){
             printf("Error creating producer-thread\n");
             exit(1);
     }
-    resCreate = pthread_join(&prod, NULL);
+    resCreate = pthread_join(prod, NULL);
     if(resCreate != 0)
     {
         printf("Thread producer joining failed\n");
         exit(1);
     }
 		fclose(f);
-		fprintf("%s", "производитель закончил работу");
+		printf("%s", "производитель закончил работу");
     return 0;   
 }
-//функция производителя
+
+/*
+*функция производителя: читает файл строка за строкой
+*в каждой строке выделяет числа, суммирует их
+*и кладет результат в общий буфер - queueSource
+*/
 static void *producer(void* arg)
 {
     char *line = NULL; int temp;
-    while ((read = getline(&line, &len, fp)) != -1) {
-          //распарсили line через strtok_r, положили суммустроки в другую очередь
+		size_t len = 0;
+		ssize_t read;
+    while ((read = getline(&line, &len, f)) != -1) {
           char *token;
           char *rest = line;
           int sumIntoStr = 0;
-          while((token = strtok_r(rest, " ", &rest))){
-                //преобразуем token в число
-                temp = atoi(token);
-                sumIntoStr+=temp;
-          }
-					printf("%d\n", sumIntoStr);
+          token = strtok(rest, " ");
+					while(token != NULL){
+							temp = atoi(token);
+							sumIntoStr += temp;
+							token = strtok(NULL, " ");
+					}
           //кладём сумму строки в очередь
           queue_enqueue(queueSource, sumIntoStr);
     }

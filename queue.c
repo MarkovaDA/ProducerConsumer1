@@ -57,8 +57,7 @@ File *f;//исходный файл с чилами
 int totalSum; //сумма всех чисел в файле
 int main(){
 		f = fopen("source.txt", "r");
-    queueSource = create(100);
+    queueSource = queue_create(100);
 		pthread_t prod;//производитель
-		int 
     return 0;   
 }
